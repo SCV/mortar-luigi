@@ -26,7 +26,7 @@ import mysql.connector
 logger = logging.getLogger('luigi-interface')
 
 
-class DMBSTask(luigi.Task):
+class DBMSTask(luigi.Task):
 
     """
     Class for tasks interacting with SQL Databases.
@@ -59,8 +59,39 @@ class DMBSTask(luigi.Task):
         raise RuntimeError("Must provide an output token")
 
 
+class PostgresTask(DBMSTask):
 
-class CreateDBMSTable(DMBSTask):
+    def get_connection(self):
+        if not self.conn:
+            dbname = luigi.configuration.get_config().get('postgres', 'dbname')
+            user = luigi.configuration.get_config().get('postgres', 'user')
+            host = luigi.configuration.get_config().get('postgres', 'host')
+            password = luigi.configuration.get_config().get('postgres', 'password')
+            port = luigi.configuration.get_config().get('postgres', 'port')
+
+            try:
+                self.conn = psycopg2.connect(dbname=dbname, user=user, host=host, password=password, port=port)
+            except:
+                raise DBMSTaskException("Unable to connect to database %s" % dbname)
+        return self.conn
+
+class MySQLTask(DBMSTask):
+
+    def get_connection(self):
+        if not self.conn:
+            dbname = luigi.configuration.get_config().get('mysql', 'dbname')
+            user = luigi.configuration.get_config().get('mysql', 'user')
+            host = luigi.configuration.get_config().get('mysql', 'host')
+            password = luigi.configuration.get_config().get('mysql', 'password')
+            port = luigi.configuration.get_config().get('mysql', 'port')
+
+            try:
+                self.conn = mysql.connector.connect(database=dbname, user=user, host=host, password=password, port=port)
+            except:
+                raise DBMSTaskException("Unable to connect to database %s" % dbname)
+        return self.conn
+
+class CreateDBMSTable(DBMSTask):
 
     def primary_key(self):
         """
@@ -90,7 +121,7 @@ class CreateDBMSTable(DMBSTask):
         return 'CREATE TABLE %s(%s, PRIMARY KEY (%s));' % (self.table_name(), self.field_string(), primary_keys)
 
 
-class SanityTestDBMSTable(DMBSTask):
+class SanityTestDBMSTable(DBMSTask):
     """
     General check that the contents of a MongoDB collection exist and contain sentinel ids.
     """
@@ -168,73 +199,26 @@ class SanityTestDBMSTable(DMBSTask):
                 logger.info("Id %s only returned %s results." % (id, num_results))
         if failure_count > self.failure_threshold:
             exception_string = 'Sanity check failed: %s ids in %s failed to return sufficient results' % \
-                        (failure_count, self.collection_name())
+                        (failure_count, self.table_name())
             logger.warn(exception_string)
             raise DBMSTaskException(exception_string)
 
-class CreatePostgresTable(CreateDBMSTable):
 
-    def get_connection(self):
-        if not self.conn:
-            dbname = luigi.configuration.get_config().get('postgres', 'dbname')
-            user = luigi.configuration.get_config().get('postgres', 'user')
-            host = luigi.configuration.get_config().get('postgres', 'host')
-            password = luigi.configuration.get_config().get('postgres', 'password')
-            port = luigi.configuration.get_config().get('postgres', 'port')
+class CreatePostgresTable(CreateDBMSTable, PostgresTask):
 
-            try:
-                self.conn = psycopg2.connect(dbname=dbname, user=user, host=host, password=password, port=port)
-            except:
-                raise DBMSTaskException("Unable to connect to database %s" % dbname)
-        return self.conn
+    pass
 
-class CreateMySQLTable(CreateDBMSTable):
+class CreateMySQLTable(CreateDBMSTable, MySQLTask):
 
-    def get_connection(self):
-        if not self.conn:
-            dbname = luigi.configuration.get_config().get('mysql', 'dbname')
-            user = luigi.configuration.get_config().get('mysql', 'user')
-            host = luigi.configuration.get_config().get('mysql', 'host')
-            password = luigi.configuration.get_config().get('mysql', 'password')
-            port = luigi.configuration.get_config().get('mysql', 'port')
+    pass
 
-            try:
-                self.conn = mysql.connector.connect(database=dbname, user=user, host=host, password=password, port=port)
-            except:
-                raise DBMSTaskException("Unable to connect to database %s" % dbname)
-        return self.conn
+class SanityTestPostgresTable(SanityTestDBMSTable, PostgresTask):
 
-class SanityTestPostgresTable(SanityTestDBMSTable):
+    pass
 
-    def get_connection(self):
-        if not self.conn:
-            dbname = luigi.configuration.get_config().get('postgres', 'dbname')
-            user = luigi.configuration.get_config().get('postgres', 'user')
-            host = luigi.configuration.get_config().get('postgres', 'host')
-            password = luigi.configuration.get_config().get('postgres', 'password')
-            port = luigi.configuration.get_config().get('postgres', 'port')
+class SanityTestMySQLTable(SanityTestDBMSTable, MySQLTask):
 
-            try:
-                self.conn = psycopg2.connect(dbname=dbname, user=user, host=host, password=password, port=port)
-            except:
-                raise DBMSTaskException("Unable to connect to database %s" % dbname)
-        return self.conn
-
-class SanityTestMySQLTable(SanityTestDBMSTable):
-
-    def get_connection(self):
-        if not self.conn:
-            dbname = luigi.configuration.get_config().get('mysql', 'dbname')
-            user = luigi.configuration.get_config().get('mysql', 'user')
-            host = luigi.configuration.get_config().get('mysql', 'host')
-            password = luigi.configuration.get_config().get('mysql', 'password')
-            port = luigi.configuration.get_config().get('mysql', 'port')
-
-            try:
-                self.conn = mysql.connector.connect(database=dbname, user=user, host=host, password=password, port=port)
-            except:
-                raise DBMSTaskException("Unable to connect to database %s" % dbname)
-        return self.conn
+    pass
 
 class DBMSTaskException(Exception):
     """
