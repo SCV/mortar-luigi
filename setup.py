@@ -46,8 +46,6 @@ setup(name='mortar-luigi',
       tests_require=[
           'mock',
           'moto',
-          'nose>=1.3.0',
-          'psycopg2',
-          'mysql-connector-python'
+          'nose>=1.3.0'
       ]
 )
