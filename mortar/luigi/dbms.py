@@ -56,7 +56,7 @@ class DBMSTask(luigi.Task):
         """
         DatabaseConnection
         """
-        raise RuntimeError("Must provide an output token")
+        raise RuntimeError("Must provide a connection")
 
 
 class PostgresTask(DBMSTask):
@@ -129,9 +129,6 @@ class SanityTestDBMSTable(DBMSTask):
     # number of entries required to be in the collection
     min_total_results = luigi.IntParameter(100)
 
-    # when testing total entries, require that these field names not be null
-    non_null_fields = luigi.Parameter([])
-
     # number of results required to be returned for each primary key
     result_length = luigi.IntParameter(5)
 
@@ -166,6 +163,8 @@ class SanityTestDBMSTable(DBMSTask):
             exception_string = 'Sanity check failed: only found %s / %s expected results in collection %s' % \
                 (len(rows), self.min_total_results, self.table_name())
             logger.warn(exception_string)
+            cur.close()
+            self.get_connection().close()
             raise DBMSTaskException(exception_string)
 
         # do a check on specific ids
@@ -177,10 +176,7 @@ class SanityTestDBMSTable(DBMSTask):
         target_factory.write_file(self.output_token())
 
     def create_overall_query(self):
-        where_clause = ' AND '.join(['%s IS NOT NULL' % field for field in self.non_null_fields])
         limit_clause = ' LIMIT %s ' % self.min_total_results
-        if where_clause:
-            return 'SELECT * FROM %s WHERE %s %s' % (self.table_name(), where_clause, limit_clause)
         return 'SELECT * FROM %s %s' % (self.table_name(), limit_clause)
 
     def create_id_query(self, id):
