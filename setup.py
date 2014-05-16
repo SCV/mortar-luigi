@@ -40,7 +40,9 @@ setup(name='mortar-luigi',
           'requests',
           'boto==2.24.0',
           'pymongo>=2.5',
-          'mortar-api-python'
+          'mortar-api-python',
+          'psycopg2',
+          'mysql-connector-python'
       ],
       test_suite="nose.collector",
       tests_require=[
