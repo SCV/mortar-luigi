@@ -36,29 +36,32 @@ class ShellScriptTask(luigi.Task):
             stderr = subprocess.PIPE
         )
         out, err = output.communicate()
+        rc = output.returncode
         # generate output message
-        message = self._create_message(cmd, out, err)
-        self._check_error(err, message)
+        message = self._create_message(cmd, out, err, rc)
+        self._check_error(rc, err, message)
 
         self.cmd_output = {
-          'cmd'   : cmd,
-          'stdout': out,
-          'stderr': err
+          'cmd'         : cmd,
+          'stdout'      : out,
+          'stderr'      : err,
+          'return_code' : rc
         }
         logger.debug('%s - output:%s' % (self.__class__.__name__, message))
         if err == '':
             target_factory.write_file(self.output_token())
 
-    def _create_message(self, cmd, out, err):
+    def _create_message(self, cmd, out, err, rc):
         message = ''
         message += '\n-----------------------------'
-        message += '\nCMD    : %s' % cmd
-        message += '\nSTDOUT : %s' % repr(out)
-        message += '\nSTDERR : %s' % repr(err)
+        message += '\nCMD         : %s' % cmd
+        message += '\nSTDOUT      : %s' % repr(out)
+        message += '\nSTDERR      : %s' % repr(err)
+        message += '\nRETURN CODE : %d' % rc
         message += '\n-----------------------------'
         return message
 
-    def _check_error(self, err, message):
-        if err != '':
+    def _check_error(self, rc, err, message):
+        if err != '' or rc != 0:
             raise RuntimeError(message)
             
