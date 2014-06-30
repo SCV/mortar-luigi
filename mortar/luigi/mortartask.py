@@ -29,6 +29,8 @@ logger = logging.getLogger('luigi-interface')
 NUM_MAP_SLOTS_PER_MACHINE = 8
 NUM_REDUCE_SLOTS_PER_MACHINE = 3
 
+NO_GIT_REF_FLAG = "not-set-flag"
+
 class MortarTask(luigi.Task):
 
      def _get_api(self):
@@ -54,7 +56,7 @@ class MortarProjectTask(MortarTask):
     use_spot_instances = luigi.BooleanParameter(True)
 
     # run on master by default
-    git_ref = luigi.Parameter(default='master')
+    git_ref = luigi.Parameter(default=NO_GIT_REF_FLAG)
 
     # Whether to notify on completion of a job
     notify_on_job_finish = luigi.BooleanParameter(default=False)
@@ -145,6 +147,24 @@ class MortarProjectTask(MortarTask):
             target_factory.write_file(self.success_token())
             logger.info('Mortar job_id [%s] completed successfully' % job_id)
 
+    def _git_ref(self):
+        """
+        Figure out value to use for git ref.  Order of precendence is:
+
+        1. git_ref parameter is set.
+        2. environment variable MORTAR_LUIGI_GIT_REF is set
+        3. master
+        """
+        if self.git_ref != NO_GIT_REF_FLAG:
+            return self.git_ref
+        else:
+            import os
+            env_git_ref = os.environ.get('MORTAR_LUIGI_GIT_REF')
+            if env_git_ref:
+                return env_git_ref
+            else:
+                return 'master'
+
 
     def _run_job(self, api):
         cluster_type = clusters.CLUSTER_TYPE_SINGLE_JOB if self.run_on_single_use_cluster \
@@ -162,12 +182,12 @@ class MortarProjectTask(MortarTask):
 
         if cluster_id:
             job_id = jobs.post_job_existing_cluster(api, self.project(), self.script(), cluster_id,
-                git_ref=self.git_ref, parameters=self.parameters(),
+                git_ref=self._git_ref(), parameters=self.parameters(),
                 notify_on_job_finish=self.notify_on_job_finish, is_control_script=self.is_control_script(),
                 pig_version=self.pig_version)
         else:
             job_id = jobs.post_job_new_cluster(api, self.project(), self.script(), self.cluster_size,
-                cluster_type=cluster_type, git_ref=self.git_ref, parameters=self.parameters(),
+                cluster_type=cluster_type, git_ref=self._git_ref(), parameters=self.parameters(),
                 notify_on_job_finish=self.notify_on_job_finish, is_control_script=self.is_control_script(),
                 pig_version=self.pig_version, use_spot_instances=self.use_spot_instances)
         logger.info('Submitted new job to mortar with job_id [%s]' % job_id)
