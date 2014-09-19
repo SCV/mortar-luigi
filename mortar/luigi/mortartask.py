@@ -68,7 +68,7 @@ class MortarProjectTask(MortarTask):
     num_polling_retries = luigi.IntParameter(default=3)
 
     # version of Pig to use
-    pig_version = luigi.Parameter(default=None)
+    pig_version = luigi.Parameter(default='0.12')
 
     @abc.abstractmethod
     def project(self):
