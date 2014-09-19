@@ -45,6 +45,7 @@ setup(name='mortar-luigi',
       test_suite="nose.collector",
       tests_require=[
           'mock',
+          'six',
           'moto',
           'nose>=1.3.0'
       ]
