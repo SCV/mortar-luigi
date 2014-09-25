@@ -34,8 +34,14 @@ NO_GIT_REF_FLAG = "not-set-flag"
 class MortarTask(luigi.Task):
 
      def _get_api(self):
-        return API(luigi.configuration.get_config().get('mortar', 'email'),
-                   luigi.configuration.get_config().get('mortar', 'api_key'))
+        config = luigi.configuration.get_config() 
+        email = config.get('mortar', 'email')
+        api_key = config.get('mortar', 'api_key')
+        if config.has_option('mortar', 'host'):
+            host = config.get('mortar', 'host')
+            return API(email, api_key, host=host)
+        else:
+            return API(email, api_key)
 
 class MortarProjectTask(MortarTask):
     """
