@@ -51,7 +51,8 @@ class MortarProjectTask(MortarTask):
     # A cluster size of 2 or greater will use a Hadoop cluster.  If there
     # is an idle cluster of cluster_size or greater that cluster will be used.
     # Otherwise a new cluster will be started.
-    # A cluster size of 0 will run the Mortar job locally on the Mortar Pig server.
+    # A cluster size of 0 will run the Mortar job directly on the Mortar Pig 
+    # server in local mode (no cluster).
     # All other cluster_size values are invalid.
     cluster_size = luigi.IntParameter(default=2)
 
@@ -59,18 +60,20 @@ class MortarProjectTask(MortarTask):
     # A single use cluster will be terminated immediately after this
     # Mortar job completes.  Otherwise it will be terminated automatically
     # after being idle for one hour. 
-    # This option does not apply when running the Mortar job locally
+    # This option does not apply when running the Mortar job in local mode
     # (cluster_size = 0).
     run_on_single_use_cluster = luigi.BooleanParameter(False)
 
     # Whether a launched Hadoop cluster will take advantage of AWS
     # Spot Pricing (https://help.mortardata.com/technologies/hadoop/spot_instance_clusters)
-    # This option does not apply when running the Mortar job locally
-    # (cluster_size = 0).
+    # This option does not apply when running in local mode (cluster_size = 0).
     use_spot_instances = luigi.BooleanParameter(True)
 
-    # The Git reference (commit hash or branch name) to
-    # use when running this program.
+    # The Git reference (commit hash or branch name) to use when running 
+    # this Mortar job.  The default value NO_GIT_REF_FLAG is a flag value 
+    # that indicates no value was entered as a parameter.  If no value
+    # is passed as a parameter the environment value "MORTAR_LUIGI_GIT_REF"
+    # is used.  If that is not set the "master" is used.
     git_ref = luigi.Parameter(default=NO_GIT_REF_FLAG)
 
     # Set to true to receive an email upon completion
