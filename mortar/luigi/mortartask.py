@@ -48,32 +48,45 @@ class MortarProjectTask(MortarTask):
     Task to run a Mortar job on a cluster. If the job fails, the task will exit with an error.
     """
 
-    # default to a cluster of size 2
+    # A cluster size of 2 or greater will use a Hadoop cluster.  If there
+    # is an idle cluster of cluster_size or greater that cluster will be used.
+    # Otherwise a new cluster will be started.
+    # A cluster size of 0 will run the Mortar job directly on the Mortar Pig 
+    # server in local mode (no cluster).
+    # All other cluster_size values are invalid.
     cluster_size = luigi.IntParameter(default=2)
 
-    # whether to run this job on it's own cluster
-    # or to use a multi-job cluster
-    # if a large enough cluster is running, it will be used,
-    # otherwise, a new multi-use cluster will be started
+
+    # A single use cluster will be terminated immediately after this
+    # Mortar job completes.  Otherwise it will be terminated automatically
+    # after being idle for one hour. 
+    # This option does not apply when running the Mortar job in local mode
+    # (cluster_size = 0).
     run_on_single_use_cluster = luigi.BooleanParameter(False)
 
-    # whether to use spot instances when starting a cluster
-    # for this job
+    # Whether a launched Hadoop cluster will take advantage of AWS
+    # Spot Pricing (https://help.mortardata.com/technologies/hadoop/spot_instance_clusters)
+    # This option does not apply when running in local mode (cluster_size = 0).
     use_spot_instances = luigi.BooleanParameter(True)
 
-    # run on master by default
+    # The Git reference (commit hash or branch name) to use when running 
+    # this Mortar job.  The default value NO_GIT_REF_FLAG is a flag value 
+    # that indicates no value was entered as a parameter.  If no value
+    # is passed as a parameter the environment value "MORTAR_LUIGI_GIT_REF"
+    # is used.  If that is not set the "master" is used.
     git_ref = luigi.Parameter(default=NO_GIT_REF_FLAG)
 
-    # Whether to notify on completion of a job
+    # Set to true to receive an email upon completion
+    # of this Mortar job.
     notify_on_job_finish = luigi.BooleanParameter(default=False)
 
-    # interval (in seconds) to poll for job status
+    # Internval (in seconds) to poll for job status.
     job_polling_interval = luigi.IntParameter(default=5)
 
-    # number of retries before giving up on polling
+    # Number of retries before giving up on polling.
     num_polling_retries = luigi.IntParameter(default=3)
 
-    # version of Pig to use
+    # Version of Pig to use.
     pig_version = luigi.Parameter(default='0.12')
 
     @abc.abstractmethod
@@ -176,7 +189,10 @@ class MortarProjectTask(MortarTask):
         cluster_type = clusters.CLUSTER_TYPE_SINGLE_JOB if self.run_on_single_use_cluster \
             else clusters.CLUSTER_TYPE_PERSISTENT
         cluster_id = None
-        if not self.run_on_single_use_cluster:
+        if cluster_size == 0:
+            # Use local cluster
+            cluster_id = clusters.LOCAL_CLUSTER_ID
+        elif not self.run_on_single_use_cluster:
             # search for a suitable cluster
             idle_clusters = self._get_idle_clusters(api, min_size=self.cluster_size)
             if idle_clusters:
@@ -185,6 +201,7 @@ class MortarProjectTask(MortarTask):
                 logger.info('Using largest running idle cluster with cluster_id [%s], size [%s]' % \
                     (largest_cluster['cluster_id'], largest_cluster['size']))
                 cluster_id = largest_cluster['cluster_id']
+
 
         if cluster_id:
             job_id = jobs.post_job_existing_cluster(api, self.project(), self.script(), cluster_id,
