@@ -25,9 +25,10 @@ def get_target(path):
         return S3Target(path)
     elif path.startswith('/'):
         return LocalTarget(path)
-        
-    elif path.startswith('file:'):
-        return FileSystemTarget(path)
+    elif path.startswith('file://'):
+        # remove the file portion
+        actual_path = path[7:]
+        return LocalTarget(actual_path)
     else:
         raise RuntimeError("Unknown scheme for path: %s" % path)
 
