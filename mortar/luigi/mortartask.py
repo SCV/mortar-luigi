@@ -189,7 +189,7 @@ class MortarProjectTask(MortarTask):
         cluster_type = clusters.CLUSTER_TYPE_SINGLE_JOB if self.run_on_single_use_cluster \
             else clusters.CLUSTER_TYPE_PERSISTENT
         cluster_id = None
-        if cluster_size == 0:
+        if self.cluster_size == 0:
             # Use local cluster
             cluster_id = clusters.LOCAL_CLUSTER_ID
         elif not self.run_on_single_use_cluster:
