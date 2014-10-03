@@ -13,6 +13,7 @@
 # the License.
 
 import abc
+import tempfile
 import time
 
 import luigi
@@ -99,7 +100,7 @@ class MortarProjectTask(MortarTask):
     @abc.abstractmethod
     def script(self):
         """
-        Name of the script to run.
+        Name of the Pig script to run.
         """
         raise RuntimeError("Must implement script!")
 
@@ -121,7 +122,7 @@ class MortarProjectTask(MortarTask):
 
     def token_path(self):
         # override with S3 path for usage across machines or on clusters
-        return "file:///tmp"
+        return 'file://%s' % tempfile.gettempdir()
 
     @abc.abstractmethod
     def script_output(self):
