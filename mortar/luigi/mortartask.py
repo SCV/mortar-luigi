@@ -13,6 +13,7 @@
 # the License.
 
 import abc
+import subprocess
 import tempfile
 import time
 
@@ -35,7 +36,7 @@ NO_GIT_REF_FLAG = "not-set-flag"
 class MortarTask(luigi.Task):
 
      def _get_api(self):
-        config = luigi.configuration.get_config() 
+        config = luigi.configuration.get_config()
         email = config.get('mortar', 'email')
         api_key = config.get('mortar', 'api_key')
         if config.has_option('mortar', 'host'):
@@ -52,7 +53,7 @@ class MortarProjectTask(MortarTask):
     # A cluster size of 2 or greater will use a Hadoop cluster.  If there
     # is an idle cluster of cluster_size or greater that cluster will be used.
     # Otherwise a new cluster will be started.
-    # A cluster size of 0 will run the Mortar job directly on the Mortar Pig 
+    # A cluster size of 0 will run the Mortar job directly on the Mortar Pig
     # server in local mode (no cluster).
     # All other cluster_size values are invalid.
     cluster_size = luigi.IntParameter(default=2)
@@ -60,7 +61,7 @@ class MortarProjectTask(MortarTask):
 
     # A single use cluster will be terminated immediately after this
     # Mortar job completes.  Otherwise it will be terminated automatically
-    # after being idle for one hour. 
+    # after being idle for one hour.
     # This option does not apply when running the Mortar job in local mode
     # (cluster_size = 0).
     run_on_single_use_cluster = luigi.BooleanParameter(False)
@@ -70,8 +71,8 @@ class MortarProjectTask(MortarTask):
     # This option does not apply when running in local mode (cluster_size = 0).
     use_spot_instances = luigi.BooleanParameter(True)
 
-    # The Git reference (commit hash or branch name) to use when running 
-    # this Mortar job.  The default value NO_GIT_REF_FLAG is a flag value 
+    # The Git reference (commit hash or branch name) to use when running
+    # this Mortar job.  The default value NO_GIT_REF_FLAG is a flag value
     # that indicates no value was entered as a parameter.  If no value
     # is passed as a parameter the environment value "MORTAR_LUIGI_GIT_REF"
     # is used.  If that is not set the "master" is used.
@@ -287,6 +288,53 @@ class MortarProjectControlscriptTask(MortarProjectTask):
 
     def is_control_script(self):
         return True
+
+class MortarRTask(luigi.Task):
+    token_path = luigi.Parameter()
+
+    def output_token(self):
+        """
+        Token written out to indicate the task has finished.
+        """
+        return target_factory.get_target('%s/%s' % (self.token_path, self.__class__.__name__))
+
+    def output(self):
+        return [self.output_token()]
+
+    @abc.abstractmethod
+    def rscript(self):
+        """
+        Path to R script relative to root of Mortar project
+        """
+        raise RuntimeError("Must implement rscript!")
+
+    def r_params(self):
+        """
+        Returns list of params to be sent to RScript.
+        """
+        return []
+
+    def run(self):
+        cmd = self._subprocess_command()
+        output = subprocess.Popen(
+            cmd,
+            shell=True,
+            stdout = subprocess.PIPE,
+            stderr = subprocess.STDOUT,
+            bufsize=1
+        )
+        for line in iter(output.stdout.readline, b''):
+            logger.info(line)
+        out, err = output.communicate()
+        rc = output.returncode
+        if rc != 0:
+            raise RuntimeError('%s returned non-zero error code %s' % (self._subprocess_command(), rc) )
+
+        target_factory.write_file(self.output_token())
+
+    def _subprocess_command(self):
+       return "RScript %s %s" % (self.rscript(), " ".join(self.r_params()))
+
 
 class MortarClusterShutdownTask(MortarTask):
     """
