@@ -335,7 +335,7 @@ class MortarRTask(luigi.Task):
         target_factory.write_file(self.output_token())
 
     def _subprocess_command(self):
-       return "RScript %s %s" % (self.rscript(), " ".join(self.arguments()))
+       return "Rscript %s %s" % (self.rscript(), " ".join(self.arguments()))
 
 
 class MortarClusterShutdownTask(MortarTask):
