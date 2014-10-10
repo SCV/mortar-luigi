@@ -304,13 +304,15 @@ class MortarRTask(luigi.Task):
     @abc.abstractmethod
     def rscript(self):
         """
-        Path to R script relative to root of Mortar project
-        """
-        raise RuntimeError("Must implement rscript!")
+        Path to R script relative to root of Mortar project.
 
-    def r_params(self):
+        Ex. rscripts/my_r_script.R
         """
-        Returns list of params to be sent to RScript.
+        raise RuntimeError("Please implement the rscript method in your MortarRTask to specify which script to run.")
+
+    def arguments(self):
+        """
+        Returns list of arguments to be sent to RScript.
         """
         return []
 
@@ -333,7 +335,7 @@ class MortarRTask(luigi.Task):
         target_factory.write_file(self.output_token())
 
     def _subprocess_command(self):
-       return "RScript %s %s" % (self.rscript(), " ".join(self.r_params()))
+       return "RScript %s %s" % (self.rscript(), " ".join(self.arguments()))
 
 
 class MortarClusterShutdownTask(MortarTask):
