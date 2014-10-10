@@ -304,9 +304,15 @@ class MortarRTask(luigi.Task):
     @abc.abstractmethod
     def rscript(self):
         """
-        Path to R script relative to root of Mortar project.
+        Path to the R script to run relative to the luigiscripts directory of your Mortar project.
 
-        Ex. rscripts/my_r_script.R
+        Ex:
+            If you have two files in your Mortar project:
+                * luigiscripts/my_r_luigiscript.py
+                * rscripts/my_r_script.R
+
+            You would return:
+                "../rscripts/my_r_script.R"
         """
         raise RuntimeError("Please implement the rscript method in your MortarRTask to specify which script to run.")
 
