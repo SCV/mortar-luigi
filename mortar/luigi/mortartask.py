@@ -28,14 +28,32 @@ from mortar.luigi import target_factory
 
 logger = logging.getLogger('luigi-interface')
 
+# Number of map task slots per m1.xlarge instance
 NUM_MAP_SLOTS_PER_MACHINE = 8
+
+# Number of reduce task slots per m1.xlarge instance
 NUM_REDUCE_SLOTS_PER_MACHINE = 3
 
+# flag to indicate that no git_ref has been passed to a mortar task method
 NO_GIT_REF_FLAG = "not-set-flag"
 
 class MortarTask(luigi.Task):
+    """
+    Superclass for Luigi Tasks that perform actions in Mortar
+    using the Mortar API.
 
-     def _get_api(self):
+    To use this class, define the following section in your Luigi 
+    client configuration file:
+
+    ::[mortar]
+    ::email: ${MORTAR_EMAIL}
+    ::api_key: ${MORTAR_API_KEY}
+    ::host: api.mortardata.com
+
+    seealso:: https://help.mortardata.com/technologies/luigi/mortar_tasks
+    """
+
+    def _get_api(self):
         config = luigi.configuration.get_config()
         email = config.get('mortar', 'email')
         api_key = config.get('mortar', 'api_key')
@@ -47,7 +65,18 @@ class MortarTask(luigi.Task):
 
 class MortarProjectTask(MortarTask):
     """
-    Task to run a Mortar job on a cluster. If the job fails, the task will exit with an error.
+    Luigi Task to run a job on the Mortar platform. 
+    If the job fails, the task will exit with an error.
+
+    To use this class, define the following section in your Luigi 
+    client configuration file:
+
+    ::[mortar]
+    ::email: ${MORTAR_EMAIL}
+    ::api_key: ${MORTAR_API_KEY}
+    ::host: api.mortardata.com
+
+    seealso:: https://help.mortardata.com/technologies/luigi/mortar_tasks
     """
 
     # A cluster size of 2 or greater will use a Hadoop cluster.  If there
@@ -94,59 +123,137 @@ class MortarProjectTask(MortarTask):
     @abc.abstractmethod
     def project(self):
         """
-        Name of the mortar project to run.
+        Override this method to provide the name of 
+        the Mortar Project to run.
+
+        :rtype: str:
+        :returns: Your project name, e.g. my-mortar-recsys
         """
-        raise RuntimeError("Must implement project!")
+        raise RuntimeError("Please implement the project method to return your project name")
 
     @abc.abstractmethod
     def script(self):
         """
-        Name of the Pig script to run.
+        Override this method to provide the name of 
+        the script to run.
+
+        :rtype: str:
+        :returns: Script name, e.g. my_pig_script
         """
-        raise RuntimeError("Must implement script!")
+        raise RuntimeError("Please implement the script method to return your script name")
 
     @abc.abstractmethod
     def is_control_script(self):
         """
-        Whether this job is a control script.
+        [DEPRECATED] Whether this job should run a control script.
+
+        :rtype: bool:
+        :returns: [DEPRECATED] whether this job should run a control script
         """
-        raise RuntimeError("Must implement is_control_script!")
+        raise RuntimeError("Please implement the is_control_script method")
 
     def parameters(self):
         """
-        Parameters for this Mortar job.
+        This method defines the parameters that Mortar will pass to your
+        your script when it runs.
+
+        :rtype: dict:
+        :returns: dict of parameters to pass, e.g. {'my-param': 'my-value'}. Default: {}
         """
         return {}
 
     def output(self):
+        """
+        The output for this Task. Returns the `success_token`
+        by default, so the Task only runs if a token indiciating success
+        has not been previously written.
+
+        :rtype: list of Target:
+        :returns: list containing one output, the `success_token`
+        """
         return [self.success_token()]
 
     def token_path(self):
+        """
+        The MortarProjectTask writes out several "tokens" as it executes, indicating
+        whether it is Running and then when it is Complete. These tokens are
+        used to ensure that the task is not rerun once it has already completed.
+
+        This method provides the base path where those tokens are written. By default,
+        tokens are written to a temporary directory on the file system.
+
+        However, for running in a cluster setting, you should overrides this method
+        to use an S3 path (e.g. s3://my-bucket/my-token-path), 
+        ensuring that tokens will be available from any machine.
+
+        :rtype: str:
+        :returns: default token path on file system - file://tempdirectory
+        """
         # override with S3 path for usage across machines or on clusters
         return 'file://%s' % tempfile.gettempdir()
 
     @abc.abstractmethod
     def script_output(self):
         """
-        List of targets for output of running Pigscript
+        List of locations where your script writes output. If your script fails, Luigi
+        will clear any output from these locations to ensure that the next run of your
+        Task is idempotent.
+
+        :rtype: list of Target:
+        :returns: list of Target to clear in case of Task failure
         """
-        raise RuntimeError("Must implement script_output!")
+        raise RuntimeError("Please implement the script_output method")
 
     def running_token(self):
         """
-        Token written out to indicate a running Pigscript
+        The MortarProjectTask writes out several "tokens" as it executes to ensure
+        idempotence. This method provides the token file that indicates that the job 
+        is running.
+
+        By default, it is stored underneath the path provided by the `token_path` method,
+        and is named after your class name. So, if your `token_path` is set to 
+        `s3://my-bucket/my-folder` and your Task is named FooTask, the token will be:
+
+        `s3://my-bucket/my-folder/FooTask-Running`
+
+        This token will contain the Mortar job_id of the job that is running.
+
+        :rtype: Target:
+        :returns: Target for the token that indicates job is running.
         """
         return target_factory.get_target('%s/%s-%s' % (self.token_path(), self.__class__.__name__, 'Running'))
 
     def success_token(self):
         """
-        Token written out to indicate the Pigscript has finished
+        The MortarProjectTask writes out several "tokens" as it executes to ensure
+        idempotence. This method provides the token file that indicates that the job 
+        has finished successfully. If this token exists, the Task will not be rerun.
+
+        By default, it is stored underneath the path provided by the `token_path` method,
+        and is named after your class name. So, if your `token_path` is set to 
+        `s3://my-bucket/my-folder` and your Task is named FooTask, the token will be:
+
+        `s3://my-bucket/my-folder/FooTask`
+
+        If you want this Task to be rerun, you should delete that token.
+
+        :rtype: Target:
+        :returns: Target for the token that indicates that this Task has succeeded.
         """
         return target_factory.get_target('%s/%s' % (self.token_path(), self.__class__.__name__))
 
     def run(self):
         """
-        Run the mortar job.
+        Run a Mortar job using the Mortar API.
+
+        This method writes out several "tokens" as it executes to ensure
+        idempotence:
+
+        * `running_token`: This token indicates that the job is currently running. If a token
+          exists at this path, Luigi will poll the currently running job instead of starting a 
+          new one.
+        * `success_token`: This token indicates that the job has already completed successfully.
+          If this token exists, Luigi will not rerun the task.
         """
         api = self._get_api()
         if self.running_token().exists():
@@ -275,7 +382,18 @@ class MortarProjectTask(MortarTask):
 
 class MortarProjectPigscriptTask(MortarProjectTask):
     """
-    Task to run a Pig script on Mortar.
+    Luigi Task to run a Pigscript on the Mortar platform. 
+    If the job fails, the task will exit with an error.
+
+    To use this class, define the following section in your Luigi 
+    client configuration file:
+
+    ::[mortar]
+    ::email: ${MORTAR_EMAIL}
+    ::api_key: ${MORTAR_API_KEY}
+    ::host: api.mortardata.com
+
+    seealso:: https://help.mortardata.com/technologies/luigi/mortar_tasks
     """
 
     def is_control_script(self):
@@ -283,22 +401,50 @@ class MortarProjectPigscriptTask(MortarProjectTask):
 
 class MortarProjectControlscriptTask(MortarProjectTask):
     """
-    Task to run a control script on Mortar.
+    [DEPRECATED]
+
+    Luigi Task to run a Pig-based control script on the Mortar platform. 
+    If the job fails, the task will exit with an error.
     """
 
     def is_control_script(self):
         return True
 
 class MortarRTask(luigi.Task):
+    """
+    Luigi Task to run an R script.
+
+    To use this Task in a pipeline, create a subclass that overrides the methods:
+
+    * `rscript`
+    * `arguments`
+
+    seealso:: https://help.mortardata.com/technologies/luigi/mortar_tasks
+    """
+
+    # Location where completion tokens are written
+    # e.g. s3://my-bucket/my-path
     token_path = luigi.Parameter()
 
     def output_token(self):
         """
-        Token written out to indicate the task has finished.
+        Luigi Target providing path to a token that indicates
+        completion of this Task.
+
+        :rtype: Target:
+        :returns: Target for Task completion token
         """
         return target_factory.get_target('%s/%s' % (self.token_path, self.__class__.__name__))
 
     def output(self):
+        """
+        The output for this Task. Returns the output token
+        by default, so the task only runs if the token does not 
+        already exist.
+
+        :rtype: Target:
+        :returns: Target for Task completion token
+        """
         return [self.output_token()]
 
     @abc.abstractmethod
@@ -313,16 +459,26 @@ class MortarRTask(luigi.Task):
 
             You would return:
                 "../rscripts/my_r_script.R"
+
+        :rtype: str:
+        :returns: Path to your R script relative to luigiscripts directory in Mortar Project. e.g. ../rscripts/my_r_script.R
         """
         raise RuntimeError("Please implement the rscript method in your MortarRTask to specify which script to run.")
 
     def arguments(self):
         """
-        Returns list of arguments to be sent to RScript.
+        Returns list of arguments to be sent to your R script.
+
+        :rtype: list of str:
+        :returns: List of arguments to pass to your R script. Default: []
         """
         return []
 
     def run(self):
+        """
+        Run an R script using the Rscript program. Pipes stdout and
+        stderr back to the logging facility.
+        """
         cmd = self._subprocess_command()
         output = subprocess.Popen(
             cmd,
@@ -346,7 +502,10 @@ class MortarRTask(luigi.Task):
 
 class MortarClusterShutdownTask(MortarTask):
     """
-    Shuts down all running clusters without active jobs for the specified user.
+    Luigi Task to shuts down all running clusters 
+    without active jobs for the specified user.
+
+    seealso:: https://help.mortardata.com/technologies/luigi/mortar_tasks
     """
 
     def _get_running_idle_clusters(self, api):
@@ -354,6 +513,9 @@ class MortarClusterShutdownTask(MortarTask):
             and c.get('status_code') == clusters.CLUSTER_STATUS_RUNNING]
 
     def run(self):
+        """
+        Shut down all running clusters without active jobs.
+        """
         api = self._get_api()
         active_clusters = self._get_running_idle_clusters(api)
         for c in active_clusters:
