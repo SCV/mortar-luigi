@@ -110,11 +110,11 @@ class LocalToS3Task(S3TransferTask):
 
 class S3ToLocalTask(S3TransferTask):
 
-    # full (absolute) target local path for the file (including file name)
-    local_path = Parameter()
-
     # S3 URL for the file to copy
     s3_path = Parameter()
+
+    # full (absolute) target local path for the file (including file name)
+    local_path = Parameter()
 
     def input_target(self):
         return S3Target(self.s3_path, client=self._get_s3_client())
