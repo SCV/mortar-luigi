@@ -60,7 +60,8 @@ class ShellScriptTask(luigi.Task):
 
         You should return a string where each line of script is separated with ';'
         Example:
-            cd my/dir; ls;
+        
+        ::cd my/dir; ls;
 
         :rtype: str:
         :returns: Shell commands to run in subprocess. e.g. "cd my/dir; ls;"
