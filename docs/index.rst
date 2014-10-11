@@ -14,6 +14,36 @@ mortartask
 
 .. automodule:: mortar.luigi.mortartask
     :members:
+
+dynamodb
+========
+
+.. automodule:: mortar.luigi.dynamodb
+    :members:
+
+mongodb
+=======
+
+.. automodule:: mortar.luigi.mongodb
+    :members:
+
+s3transfer
+==========
+
+.. automodule:: mortar.luigi.s3transfer
+    :members:
+
+shellscript
+===========
+
+.. automodule:: mortar.luigi.shellscript
+    :members:
+
+target_factory
+==============
+
+.. automodule:: mortar.luigi.target_factory
+    :members:
  
 Indices and tables
 ==================
