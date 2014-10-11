@@ -9,7 +9,7 @@ from moto import mock_s3
 import moto
 
 
-s3_path = 's3://bucket/key'
+s3_root_path = 's3://bucket/key'
 AWS_ACCESS_KEY = "XXXXXX"
 AWS_SECRET_KEY = "XXXXXX"
 
@@ -18,13 +18,17 @@ class TestS3ToLocalTask(unittest.TestCase):
     @mock_s3
     @patch("luigi.configuration")
     def setUp(self, mock_config):
+
+        # setup a temporary local file
         f = tempfile.NamedTemporaryFile(mode='wb', delete=False)
         self.tempFileContents = "I'm a temporary file for testing\nAnd this is the second line\nThis is the third."
         f.write(self.tempFileContents)
         f.close()
-        self.tempFilePath = f.name
+
+        self.local_path = f.name
         self.file_name = f.name[f.name.rindex('/')+1:]
-        self.local_path = f.name[:f.name.rindex('/')]
+        self.s3_path = s3_root_path + '/' + self.file_name
+
         self.s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
         bucket = self.s3_client.s3.create_bucket('bucket')
         k = Key(bucket)
@@ -32,29 +36,28 @@ class TestS3ToLocalTask(unittest.TestCase):
         mock_config.get_config.return_value.get.return_value = AWS_ACCESS_KEY 
 
     def tearDown(self):
-        os.remove(self.tempFilePath)
+        os.remove(self.local_path)
     
-    def test_path(self):
+    def test_path_s3(self):
         """
         Tests that the input and output paths are set properly
         """
-        t = S3ToLocalTask(s3_path, self.local_path, self.file_name) 
+        t = S3ToLocalTask(s3_path=self.s3_path, local_path=self.local_path) 
         t.client = self.s3_client
         luigi.build([t], local_scheduler=True)
-        self.assertEquals(self.tempFilePath, t.output_target().path)
-        self.assertEquals("%s/%s" % (s3_path, self.file_name), t.input_target().path)
-        self.assertEquals(self.tempFilePath, t.output()[0].path)
+        self.assertEquals(self.local_path, t.output_target().path)
+        self.assertEquals(self.local_path, t.output()[0].path)
+        self.assertEquals(self.s3_path, t.input_target().path)
 
-    def test_run_content(self):
+    def test_run_content_s3(self):
         """
         Test that output at LocalTarget is same as input from S3 Target
         """
-        t = S3ToLocalTask(s3_path, self.local_path, self.file_name) 
+        t = S3ToLocalTask(s3_path=self.s3_path, local_path=self.local_path) 
         t.client = self.s3_client 
         luigi.build([t], local_scheduler=True)
         target = t.output_target()
-        self.assertEquals(target.open('r').read(), self.tempFileContents) 
-
+        self.assertEquals(target.open('r').read(), self.tempFileContents)
 
 
 """
@@ -69,6 +72,7 @@ class TestLocalToS3Task(unittest.TestCase):
         self.tempFilePath = f.name
         self.file_name = f.name[f.name.rindex('/')+1:]
         self.local_path = f.name[:f.name.rindex('/')]
+        self.s3_path = s3_root_path + '/' + self.file_name
 
         # We need to create the bucket since this is all in Moto's 'virtual' AWS account
         self.mock = mock_s3()
@@ -87,22 +91,22 @@ class TestLocalToS3Task(unittest.TestCase):
 
 
 
-    def test_path(self):
+    def test_path_local(self):
         """
         Tests that the input and output paths are set properly
         """
-        t = LocalToS3Task(s3_path, self.local_path, self.file_name) 
+        t = LocalToS3Task(local_path=self.local_path, s3_path=self.s3_path)
         t.client = self.s3_client
         luigi.build([t], local_scheduler=True)
-        self.assertEquals("%s/%s" % (self.local_path, self.file_name), t.input_target().path)
-        self.assertEquals("%s/%s" % (s3_path, self.file_name), t.output()[0].path)
+        self.assertEquals(self.local_path, t.input_target().path)
+        self.assertEquals(self.s3_path, t.output()[0].path)
         self.assertEquals(t.output()[0].path, t.output_target().path)
 
     def test_run_content(self):
         """
         Test content at S3 target is same as local
         """
-        t = LocalToS3Task(s3_path, self.local_path, self.file_name) 
+        t = LocalToS3Task(local_path=self.local_path, s3_path=self.s3_path)
         t.client = self.s3_client
         luigi.build([t], local_scheduler=True)
         self.assertTrue(t.output_target().exists())

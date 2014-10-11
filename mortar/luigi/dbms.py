@@ -18,50 +18,93 @@ import luigi
 import logging
 from mortar.luigi import target_factory
 
-import psycopg2
-import psycopg2.errorcodes
-import psycopg2.extensions
-import mysql.connector
-
 logger = logging.getLogger('luigi-interface')
 
 
 class DBMSTask(luigi.Task):
-
     """
-    Class for tasks interacting with SQL Databases.
+    Superclass for Luigi Tasks interacting with SQL Databases.
+
+    seealso:: https://help.mortardata.com/technologies/luigi/dbms_tasks
     """
 
     @abc.abstractmethod
     def table_name(self):
         """
-        Name of the table
+        Name of the table on which operation should be performed.
+
+        :rtype: str:
+        :returns: table_name for operation
         """
-        raise RuntimeError("Must provide a table name")
+        raise RuntimeError("Please implement the table_name method in your DBMSTask subclass")
 
 
     @abc.abstractmethod
     def output_token(self):
         """
-        Token to be written out on completion of the task.
+        Luigi Target providing path to a token that indicates
+        completion of this Task.
+
+        :rtype: Target:
+        :returns: Target for Task completion token
         """
-        raise RuntimeError("Must provide an output token")
+        raise RuntimeError("Please implement the output_token method in your DBMSTask subclass")
 
     def output(self):
+        """
+        The output for this Task. Returns the output token
+        by default, so the task only runs if the token does not 
+        already exist.
+
+        :rtype: Target:
+        :returns: Target for Task completion token
+        """
         return self.output_token()
 
     conn = None
 
     def get_connection(self):
         """
-        DatabaseConnection
+        Get a connection to the database. Subclasses must implement
+        this method to provide database connection.
+
+        :rtype: Connection:
+        :returns: Database connection
         """
-        raise RuntimeError("Must provide a connection")
+        raise RuntimeError("Please implement the get_connection method in your DBMSTask subclass")
 
 
 class PostgresTask(DBMSTask):
+    """
+    Superclass for Luigi Tasks that interact with a
+    PostgreSQL database.
+
+    To use this class, define the following section in your Luigi 
+    configuration file:
+
+    ::[postgres]
+    ::dbname=my_database_name
+    ::host=my_hostname
+    ::port=my_port
+    ::user=my_username
+    ::password=my_password
+
+    Also, ensure you have installed the psycopg2 module.
+
+    seealso:: https://help.mortardata.com/technologies/luigi/dbms_tasks
+    """
 
     def get_connection(self):
+        """
+        Get a connection to the PostgreSQL database.
+
+        :rtype: Connection:
+        :returns: Database connection
+        """
+        import psycopg2
+        import psycopg2.errorcodes
+        import psycopg2.extensions
+
         if not self.conn:
             dbname = luigi.configuration.get_config().get('postgres', 'dbname')
             user = luigi.configuration.get_config().get('postgres', 'user')
@@ -72,12 +115,41 @@ class PostgresTask(DBMSTask):
             try:
                 self.conn = psycopg2.connect(dbname=dbname, user=user, host=host, password=password, port=port)
             except:
-                raise DBMSTaskException("Unable to connect to database %s" % dbname)
+                raise DBMSTaskException(
+                    "Unable to connect to database %s, host: %s, port: %s, user: %s" % \
+                        (dbname, host, port, user))
         return self.conn
 
 class MySQLTask(DBMSTask):
+    """
+    Superclass for Luigi Tasks that interact with a
+    MySQL database.
+
+    To use this class, define the following section in your Luigi 
+    configuration file:
+
+    ::[mysql]
+    ::dbname=my_database_name
+    ::host=my_hostname
+    ::port=my_port
+    ::user=my_username
+    ::password=my_password
+
+    Also, ensure you have installed the mysql-connector-python
+    module.
+
+    seealso:: https://help.mortardata.com/technologies/luigi/dbms_tasks
+    """
 
     def get_connection(self):
+        """
+        Get a connection to the MySQL database.
+
+        :rtype: Connection:
+        :returns: Database connection
+        """
+        import mysql.connector
+
         if not self.conn:
             dbname = luigi.configuration.get_config().get('mysql', 'dbname')
             user = luigi.configuration.get_config().get('mysql', 'user')
@@ -92,70 +164,94 @@ class MySQLTask(DBMSTask):
         return self.conn
 
 class CreateDBMSTable(DBMSTask):
-
+    """
+    Superclass for Tasks to create a new table in a DBMS.
+    Don't instantiate this directly; use the :py:class:`CreatePostgresTable`
+    or :py:class:`CreateMySQLTable` instead.
+    """
     def primary_key(self):
         """
-        List of primary keys
+        List of primary key columns to set for the new table.
+
+        :rtype: list of str:
+        :returns: list of primary key columns
         """
-        raise RuntimeError("Must provide a primary key")
+        raise RuntimeError("Please implement the primary_key method to provide primary key columns")
 
     def field_string(self):
         """
-        String enumerating all fields, including primary keys
+        String enumerating all fields and their data types, 
+        including primary keys.
+
         e.g.: 'num integer, data varchar'
+
+        :rtype: str:
+        :returns: fields and data types to include in the table, comma-delimited
         """
-        raise RuntimeError("Must provide a field string")
+        raise RuntimeError("Please implement the field_string method to provide fields for the table")
 
     def run(self):
+        """
+        Create database table.
+        """
         connection = self.get_connection()
         cur = connection.cursor()
-        table_query = self.create_table_query()
+        table_query = self._create_table_query()
         cur.execute(table_query)
         connection.commit()
         cur.close()
         connection.close()
+        # write token to acknowledge table creation
         target_factory.write_file(self.output_token())
 
-    def create_table_query(self):
+    def _create_table_query(self):
         primary_keys = ','.join(self.primary_key())
         return 'CREATE TABLE %s(%s, PRIMARY KEY (%s));' % (self.table_name(), self.field_string(), primary_keys)
 
 
 class SanityTestDBMSTable(DBMSTask):
     """
-    General check that the contents of a MongoDB collection exist and contain sentinel ids.
+    Superclass for Tasks to sanity test that a set of IDs
+    exist in a table (usually after loading it with data).
     """
 
-    # number of entries required to be in the collection
+    # minimum number of rows required to be in the table
     min_total_results = luigi.IntParameter(100)
 
-    # number of results required to be returned for each primary key
+    # number of results required to be returned for each ID
     result_length = luigi.IntParameter(5)
 
-    # when testing specific ids, how many are allowed to fail
+    # when testing specific IDs, how many are allowed to fail?
     failure_threshold = luigi.IntParameter(2)
 
     @abc.abstractmethod
     def id_field(self):
         """
-        Name of the id field
+        Name of the ID field to sanity check.
+
+        :rtype: str:
+        :returns: name of ID field to sanity check
         """
-        raise RuntimeError("Must provide an id field")
+        raise RuntimeError("Please implement the id_field method")
 
     @abc.abstractmethod
     def ids(self):
         """
-        Sentinel ids to check
+        List of IDs to sanity check.
+
+        :rtype: list of str:
+        :returns: list of IDs
         """
         return RuntimeError("Must provide list of ids to sanity test")
 
     def run(self):
         """
-        Run sanity check.
+        Run a sanity check on the table, ensuring that
+        data was loaded appropriately.  Raises a :py:class:`DBMSTaskException`
+        if the sanity check fails.
         """
-
         cur = self.get_connection().cursor()
-        overall_query = self.create_overall_query()
+        overall_query = self._create_overall_query()
         cur.execute(overall_query)
         rows = cur.fetchall()
 
@@ -175,18 +271,18 @@ class SanityTestDBMSTable(DBMSTask):
         # write token to note completion
         target_factory.write_file(self.output_token())
 
-    def create_overall_query(self):
+    def _create_overall_query(self):
         limit_clause = ' LIMIT %s ' % self.min_total_results
         return 'SELECT * FROM %s %s' % (self.table_name(), limit_clause)
 
-    def create_id_query(self, id):
+    def _create_id_query(self, id):
         return 'SELECT * FROM %s WHERE %s = \'%s\'' % (self.table_name(), self.id_field(), id)
 
     def _sanity_check_ids(self):
         failure_count = 0
         cur = self.get_connection().cursor()
         for id in self.ids():
-            id_query = self.create_id_query(id)
+            id_query = self._create_id_query(id)
             cur.execute(id_query)
             rows = cur.fetchall()
             num_results = len(rows)
@@ -201,23 +297,88 @@ class SanityTestDBMSTable(DBMSTask):
 
 
 class CreatePostgresTable(CreateDBMSTable, PostgresTask):
+    """
+    Create a new table in a PostgreSQL database.
 
+    To use this class, define the following section in your Luigi 
+    configuration file:
+
+    ::[postgres]
+    ::dbname=my_database_name
+    ::host=my_hostname
+    ::port=my_port
+    ::user=my_username
+    ::password=my_password
+
+    Also, ensure you have installed the psycopg2 module.
+
+    seealso:: https://help.mortardata.com/technologies/luigi/dbms_tasks
+    """
     pass
 
 class CreateMySQLTable(CreateDBMSTable, MySQLTask):
+    """
+    Create a new table in a MySQL database.
 
+    To use this class, define the following section in your Luigi 
+    configuration file:
+
+    ::[mysql]
+    ::dbname=my_database_name
+    ::host=my_hostname
+    ::port=my_port
+    ::user=my_username
+    ::password=my_password
+
+    Also, ensure you have installed the mysql-connector-python
+    module.
+
+    seealso:: https://help.mortardata.com/technologies/luigi/dbms_tasks
+    """
     pass
 
 class SanityTestPostgresTable(SanityTestDBMSTable, PostgresTask):
+    """
+    Run a sanity test that data has been properly loaded
+    into a PostgreSQL database table.
 
+    To use this class, define the following section in your Luigi 
+    configuration file:
+
+    ::[postgres]
+    ::dbname=my_database_name
+    ::host=my_hostname
+    ::port=my_port
+    ::user=my_username
+    ::password=my_password
+
+    Also, ensure you have installed the psycopg2 module.
+
+    seealso:: https://help.mortardata.com/technologies/luigi/dbms_tasks
+    """
     pass
 
 class SanityTestMySQLTable(SanityTestDBMSTable, MySQLTask):
+    """
+    To use this class, define the following section in your Luigi 
+    configuration file:
 
+    ::[mysql]
+    ::dbname=my_database_name
+    ::host=my_hostname
+    ::port=my_port
+    ::user=my_username
+    ::password=my_password
+
+    Also, ensure you have installed the mysql-connector-python
+    module.
+
+    seealso:: https://help.mortardata.com/technologies/luigi/dbms_tasks
+    """
     pass
 
 class DBMSTaskException(Exception):
     """
-    Exception thrown by MongoDBTasks
+    Exception thrown by DBMSTask subclasses.
     """
     pass
