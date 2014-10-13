@@ -419,7 +419,7 @@ class MortarRTask(luigi.Task):
     * `rscript`
     * `arguments`
 
-    seealso:: https://help.mortardata.com/technologies/luigi/mortar_tasks
+    seealso:: https://help.mortardata.com/technologies/luigi/r_tasks
     """
 
     # Location where completion tokens are written
@@ -505,7 +505,7 @@ class MortarClusterShutdownTask(MortarTask):
     Luigi Task to shuts down all running clusters 
     without active jobs for the specified user.
 
-    seealso:: https://help.mortardata.com/technologies/luigi/mortar_tasks
+    seealso:: https://help.mortardata.com/technologies/luigi/cluster_management_tasks
     """
 
     def _get_running_idle_clusters(self, api):
