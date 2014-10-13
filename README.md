@@ -1,36 +1,22 @@
 # mortar-luigi
 
+mortar-luigi is an open source collection of extensions for using [Mortar](https://www.mortardata.com/) from within [Luigi](https://github.com/spotify/luigi) data pipelines.
+
+For lots of additional information on mortar-luigi and luigi, see [Mortar's luigi help site](https://help.mortardata.com/technologies/luigi).
+
 [![Build Status](https://travis-ci.org/mortardata/mortar-luigi.png?branch=master)](https://travis-ci.org/mortardata/mortar-luigi)
 
-## Installation
+# Installation
 
-    # create a virtualenv
-    virtualenv ~/code/ve_luigi
-    source ~/code/ve_luigi/bin/activate
+mortar-luigi is installed automatically when using the [Mortar Development Framework](https://help.mortardata.com/technologies/mortar/install_mortar). You can also build and install it from source via:
 
-    # install mortar's fork of luigi
-    cd ~/code
-    git clone git@github.com:mortardata/luigi.git
-    cd luigi
-    python setup.py develop
-    
-    # install mortar-api-python
-    cd ~/code
-    git clone git@github.com:mortardata/mortar-api-python.git
-    cd mortar-api-python
-    python setup.py develop
-    
-    # install mortar-luigi
-    cd ~/code
-    git clone git@github.com:mortardata/mortar-luigi.git
-    cd mortar-luigi
-    python setup.py develop
+```bash
+git clone git@github.com:mortardata/mortar-luigi.git
+cd mortar-luigi
+python setup.py egg_info sdist --format=gztar
+pip install dist/mortar-luigi-0.1.0.tar.gz
+```
 
-## 'Sample-Test' Mode
+# Examples
 
-* Uses the --sample-test command line argument
-* Data will be assumed to be in s3://<bucket_name>/sample_data/input/
-* Failed validations of dynamodb tables or API will be ignored
-* Local client.cfg should be set to non-production dynamodb parameters
-
-
+For a full list of included Luigi Tasks and examples, see the Luigi Tasks section of [Mortar's luigi help site](https://help.mortardata.com/technologies/luigi).
