@@ -2,7 +2,6 @@ import unittest, luigi
 from luigi import configuration
 from mock import patch
 
-from mortar.api.v2 import API
 
 from mortar.luigi.mortartask import MortarTask, MortarProjectTask
 
