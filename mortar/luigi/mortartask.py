@@ -75,8 +75,9 @@ class MortarProjectTask(MortarTask):
     ::email: ${MORTAR_EMAIL}
     ::api_key: ${MORTAR_API_KEY}
     ::host: api.mortardata.com
+    ::project_name: ${MORTAR_PROJECT_NAME}
 
-    seealso:: https://help.mortardata.com/technologies/luigi/mortar_tasks
+    see also:: https://help.mortardata.com/technologies/luigi/mortar_tasks
     """
 
     # A cluster size of 2 or greater will use a Hadoop cluster.  If there
@@ -120,16 +121,18 @@ class MortarProjectTask(MortarTask):
     # Version of Pig to use.
     pig_version = luigi.Parameter(default='0.12')
 
-    @abc.abstractmethod
     def project(self):
         """
         Override this method to provide the name of 
-        the Mortar Project to run.
+        the Mortar Project.
 
         :rtype: str:
         :returns: Your project name, e.g. my-mortar-recsys
         """
-        raise RuntimeError("Please implement the project method to return your project name")
+        if luigi.configuration.get_config().has_option('mortar', 'project_name'):
+            project_name = luigi.configuration.get_config().get('mortar', 'project_name')
+            return project_name
+        raise RuntimeError("Please implement the project method or provide a project_name configuration item to return your project name")
 
     @abc.abstractmethod
     def script(self):
