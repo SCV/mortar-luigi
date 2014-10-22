@@ -1,0 +1,6 @@
+requests
+boto
+pymongo
+https://s3.amazonaws.com/mortar-pypi/luigi/luigi.tar.gz
+https://s3.amazonaws.com/mortar-pypi/mortar-api-python/mortar-api-python.tar.gz
+https://s3.amazonaws.com/mortar-pypi/mortar-luigi/mortar-luigi.tar.gz
