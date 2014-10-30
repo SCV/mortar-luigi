@@ -14,6 +14,7 @@
 
 import abc
 import datetime
+import logging
 
 import luigi
 from luigi import configuration, LocalTarget
@@ -21,6 +22,8 @@ from luigi.parameter import Parameter
 from luigi.s3 import S3Target, S3PathTask, S3Client
 
 from mortar.luigi import target_factory
+
+logger = logging.getLogger('luigi-interface')
 
 class S3TransferTask(luigi.Task):
     """
@@ -46,27 +49,6 @@ class S3TransferTask(luigi.Task):
     @abc.abstractmethod
     def output_target(self):
         raise RuntimeError("Please implement output_target method")
-
-    def run(self):
-        """
-        Run the copy operation.
-        """
-        if not self.output_target().exists():
-            try:
-                r = self.input_target().open('r')
-                w = self.output_target().open('w')
-                w.write(r.read())
-                w.close()
-            except:
-                basic_error = "Error in writing from %s to %s" % (self.input_target().path, self.output_target().path)
-                if self.output_target().exists():
-                    try:
-                        self.output().remove()
-                    except:
-                        raise RuntimeError(basic_error + " and an error occured while deleting partially written file")
-                raise RuntimeError(basic_error )
-        else:
-            raise RuntimeError("Target %s already exists!" % self.output_target().path)
 
     def _get_s3_client(self):
         if not hasattr(self, "client"):
@@ -107,6 +89,15 @@ class LocalToS3Task(S3TransferTask):
     def output_target(self):
         return S3Target(self.s3_path, client=self._get_s3_client())
 
+    def run(self):
+        """
+        Transfer data from local file to S3 file.
+        """
+        input_path = self.input_target().path
+        output_path = self.output_target().path
+        s3_client = self._get_s3_client()
+        logger.info('Uploading [%s] to [%s]' % (input_path, output_path))
+        s3_client.put_multipart(input_path, output_path)
 
 class S3ToLocalTask(S3TransferTask):
 
@@ -121,3 +112,14 @@ class S3ToLocalTask(S3TransferTask):
 
     def output_target(self):
         return LocalTarget(self.local_path)
+
+    def run(self):
+        """
+        Transfer data from S3 file to local file.
+        """
+        input_path = self.input_target().path
+        output_path = self.output_target().path
+        s3_client = self._get_s3_client()
+        logger.info('Downloading [%s] to [%s]' % (input_path, output_path))
+        key = s3_client.get_key(input_path)
+        key.get_contents_to_filename(output_path)
