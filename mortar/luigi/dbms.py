@@ -421,6 +421,13 @@ class ExtractFromMySQL(luigi.Task):
     # Example: s3://my-path/my-output-path
     output_path = luigi.Parameter()
 
+    # The mysql CLI exports the string "NULL" whenever a field
+    # is NULL. If replace_null_with_blank is true, any occurrrence of
+    # the string "NULL" in the extract will be replaced with a
+    # blank string.
+    # Default: True
+    replace_null_with_blank = luigi.BooleanParameter(default=True)
+
     def output(self):
         """
         Tell Luigi about the output that this Task produces.
@@ -439,6 +446,8 @@ class ExtractFromMySQL(luigi.Task):
         where_clause = 'WHERE %s' % self.where if self.where else ''
 
         cmd_template = 'mysql --user="{user}" --password="{password}" --host="{host}" --port="{port}" --compress --reconnect --quick --skip-column-names -e "SELECT {columns} FROM {table} {where_clause}" "{dbname}"'
+        if self.replace_null_with_blank:
+            cmd_template += ' | sed -e "s/NULL//g"'
         cmd = cmd_template.format(
             user=user,
             password=password,
