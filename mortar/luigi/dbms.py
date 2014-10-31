@@ -428,16 +428,6 @@ class ExtractFromMySQL(luigi.Task):
         """
         return [target_factory.get_target(self.output_path)]
 
-    def requires(self):
-        """
-        The requires method is how you build your dependency graph in Luigi.  Luigi will not
-        run this task until all tasks returned in this list are complete.
-
-        ExtractWikipediaDataTask is the first task in our pipeline.  An empty list is
-        returned to tell Luigi that this task is always ready to run.
-        """
-        return []
-
     def run(self):
         config = luigi.configuration.get_config()
         dbname = self.dbname if self.dbname else config.get('mysql', 'dbname')
