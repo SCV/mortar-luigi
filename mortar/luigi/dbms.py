@@ -428,6 +428,12 @@ class ExtractFromMySQL(luigi.Task):
     # Default: True
     replace_null_with_blank = luigi.BooleanParameter(default=True)
 
+    # Usually, the mysql CLI escapes control characters.
+    # For example: newline, tab, NUL, and backslash are written as \n, \t, \0, and \\. 
+    # If raw is set, this character escaping will be disabled.
+    # Default: False
+    raw = luigi.BooleanParameter(default=False)
+
     def output(self):
         """
         Tell Luigi about the output that this Task produces.
@@ -444,8 +450,8 @@ class ExtractFromMySQL(luigi.Task):
         port = config.get('mysql', 'port')
 
         where_clause = 'WHERE %s' % self.where if self.where else ''
-
-        cmd_template = 'mysql --user="{user}" --password="{password}" --host="{host}" --port="{port}" --compress --reconnect --quick --skip-column-names -e "SELECT {columns} FROM {table} {where_clause}" "{dbname}"'
+        raw_option = '--raw' if self.raw else ''
+        cmd_template = 'mysql --user="{user}" --password="{password}" --host="{host}" --port="{port}" --compress --reconnect --quick --skip-column-names {raw_option} -e "SELECT {columns} FROM {table} {where_clause}" "{dbname}"'
         if self.replace_null_with_blank:
             # replace explicit NULL characters with sed
             # and be sure to capture mysql failures by setting
@@ -459,6 +465,7 @@ class ExtractFromMySQL(luigi.Task):
             columns=self.columns,
             table=self.table,
             where_clause=where_clause,
+            raw_option=raw_option,
             dbname=dbname)
         cmd_printable = cmd_template.format(
             user=user,
@@ -468,6 +475,7 @@ class ExtractFromMySQL(luigi.Task):
             columns=self.columns,
             table=self.table,
             where_clause=where_clause,
+            raw_option=raw_option,
             dbname=dbname)
 
         # open up the target output to store data
