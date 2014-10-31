@@ -13,6 +13,7 @@
 # the License.
 
 import abc
+import subprocess
 
 import luigi
 import logging
@@ -376,6 +377,117 @@ class SanityTestMySQLTable(SanityTestDBMSTable, MySQLTask):
     seealso:: https://help.mortardata.com/technologies/luigi/dbms_tasks
     """
     pass
+
+class ExtractFromMySQL(luigi.Task):
+    """
+    Extracts data from MySQL.
+
+    To use this class, define the following section in your Luigi 
+    configuration file:
+
+    ::[mysql]
+    ::dbname=my_database_name
+    ::host=my_hostname
+    ::port=my_port
+    ::user=my_username
+    ::password=my_password
+
+    Also, ensure you have installed the mysql command-line tool
+    on your system. This tool is installed automatically on 
+    Mortar's pipeline servers.
+    """
+
+    # Name of MySQL Database where table is located.
+    # Default: mysql.dbname in your configuration file.
+    dbname = luigi.Parameter(default=None)
+
+    # Table to extract
+    table = luigi.Parameter()
+
+    # Columns to select, in comma-delimited list.
+    # e.g. "mycol1,mycol2,mycol3"
+    #
+    # NOTE: You should override the default with
+    # an explicit column list to ensure correct ordering if
+    # you add new columns to your table.
+    columns = luigi.Parameter(default='*')
+
+    # Custom WHERE clause (excluding the WHERE part).
+    # Default: no where clause; all rows selected.
+    # Example: 'mycol < 75'
+    where = luigi.Parameter(default=None)
+
+    # Output location for the extracted data.
+    # Example: s3://my-path/my-output-path
+    output_path = luigi.Parameter()
+
+    # The mysql CLI exports the string "NULL" whenever a field
+    # is NULL. If replace_null_with_blank is true, any occurrrence of
+    # the string "NULL" in the extract will be replaced with a
+    # blank string.
+    # Default: True
+    replace_null_with_blank = luigi.BooleanParameter(default=True)
+
+    def output(self):
+        """
+        Tell Luigi about the output that this Task produces.
+        If that output already exists, Luigi will not rerun it.
+        """
+        return [target_factory.get_target(self.output_path)]
+
+    def run(self):
+        config = luigi.configuration.get_config()
+        dbname = self.dbname if self.dbname else config.get('mysql', 'dbname')
+        user = config.get('mysql', 'user')
+        host = config.get('mysql', 'host')
+        password = config.get('mysql', 'password')
+        port = config.get('mysql', 'port')
+
+        where_clause = 'WHERE %s' % self.where if self.where else ''
+
+        cmd_template = 'mysql --user="{user}" --password="{password}" --host="{host}" --port="{port}" --compress --reconnect --quick --skip-column-names -e "SELECT {columns} FROM {table} {where_clause}" "{dbname}"'
+        if self.replace_null_with_blank:
+            cmd_template += ' | sed -e "s/NULL//g"'
+        cmd = cmd_template.format(
+            user=user,
+            password=password,
+            host=host,
+            port=port,
+            columns=self.columns,
+            table=self.table,
+            where_clause=where_clause,
+            dbname=dbname)
+        cmd_printable = cmd_template.format(
+            user=user,
+            password='[REDACTED]',
+            host=host,
+            port=port,
+            columns=self.columns,
+            table=self.table,
+            where_clause=where_clause,
+            dbname=dbname)
+
+        # open up the target output to store data
+        output_data_file = self.output()[0].open('w')
+        logger.info('Extracting data from MySQL with command: %s' % cmd_printable)
+        output = subprocess.Popen(
+            cmd,
+            shell=True,
+            stdout = output_data_file,
+            stderr = subprocess.PIPE,
+            # buffer line-by-line to stdout
+            bufsize=1
+        )
+        # report any error messages to logs
+        for line in iter(output.stderr.readline, b''):
+            if line and not 'Using a password' in line:
+                logger.info(line)
+        out, err = output.communicate()
+        rc = output.returncode
+        if rc != 0:
+            raise RuntimeError('%s returned non-zero error code %s' % (cmd_printable, rc))
+        output_data_file.close()
+
 
 class DBMSTaskException(Exception):
     """
