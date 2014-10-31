@@ -447,7 +447,10 @@ class ExtractFromMySQL(luigi.Task):
 
         cmd_template = 'mysql --user="{user}" --password="{password}" --host="{host}" --port="{port}" --compress --reconnect --quick --skip-column-names -e "SELECT {columns} FROM {table} {where_clause}" "{dbname}"'
         if self.replace_null_with_blank:
-            cmd_template += ' | sed -e "s/NULL//g"'
+            # replace explicit NULL characters with sed
+            # and be sure to capture mysql failures by setting
+            # pipefail
+            cmd_template = 'set -o pipefail && ' +  cmd_template + ' | sed -e "s/NULL//g"'
         cmd = cmd_template.format(
             user=user,
             password=password,
