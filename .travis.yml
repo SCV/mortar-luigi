@@ -3,6 +3,7 @@ python:
   - "2.7"
 install:
   - pip install https://s3.amazonaws.com/m0rtar-pypi/luigi/luigi.tar.gz
+  - pip install mortar-api-python
   - pip install mock
   - python setup.py -q install
 script: python setup.py test -v
