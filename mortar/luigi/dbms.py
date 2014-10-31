@@ -484,6 +484,7 @@ class ExtractFromMySQL(luigi.Task):
         output = subprocess.Popen(
             cmd,
             shell=True,
+            executable='/bin/bash',
             stdout = output_data_file,
             stderr = subprocess.PIPE,
             # buffer line-by-line to stdout
