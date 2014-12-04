@@ -13,6 +13,7 @@
 # the License.
 
 import abc
+import os
 import subprocess
 import tempfile
 import time
@@ -319,12 +320,13 @@ class MortarProjectTask(MortarTask):
             job_id = jobs.post_job_existing_cluster(api, self.project(), self.script(), cluster_id,
                 git_ref=self._git_ref(), parameters=self.parameters(),
                 notify_on_job_finish=self.notify_on_job_finish, is_control_script=self.is_control_script(),
-                pig_version=self.pig_version)
+                pig_version=self.pig_version, pipeline_job_id=self._get_pipeline_job_id())
         else:
             job_id = jobs.post_job_new_cluster(api, self.project(), self.script(), self.cluster_size,
                 cluster_type=cluster_type, git_ref=self._git_ref(), parameters=self.parameters(),
                 notify_on_job_finish=self.notify_on_job_finish, is_control_script=self.is_control_script(),
-                pig_version=self.pig_version, use_spot_instances=self.use_spot_instances)
+                pig_version=self.pig_version, use_spot_instances=self.use_spot_instances, 
+                pipeline_job_id=self._get_pipeline_job_id())
         logger.info('Submitted new job to mortar with job_id [%s]' % job_id)
         return job_id
 
@@ -382,6 +384,14 @@ class MortarProjectTask(MortarTask):
         if job.get('status_details'):
             desc += ' - %s' % job.get('status_details')
         return desc
+
+    def _get_pipeline_job_id(self):
+        """
+        Get the job_id for the parent luigi pipeline 
+        that executed this Pig job, if applicable.
+        """
+        return os.environ.get('PIPELINE_JOB_ID')
+
 
 class MortarProjectPigscriptTask(MortarProjectTask):
     """
