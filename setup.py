@@ -30,7 +30,7 @@ setup(name='mortar-luigi',
           'requests',
           'boto==2.24.0',
           'pymongo>=2.5',
-          'mortar-api-python>=0.2.2'
+          'mortar-api-python>=0.2.4'
       ],
       test_suite="nose.collector",
       tests_require=[
