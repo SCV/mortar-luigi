@@ -83,6 +83,7 @@ PIG_TYPE_TO_REDSHIFT_TYPE = {
     15: "bigint",
     20: "float8",
     25: "float8",
+    50: "varchar(max)",
     55: "varchar(max)",
 }
 
