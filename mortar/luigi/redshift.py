@@ -16,6 +16,7 @@ import abc
 import json
 import logging
 
+import luigi
 from luigi.contrib import redshift
 from luigi.s3 import S3Client
 
@@ -28,6 +29,13 @@ class CopyPigOutputToRedshiftTask(redshift.S3CopyToTable):
     to dynamically determine the columns that will be used to
     load Redshift.
     """
+
+    # If a field name has aliases prepended to its name,
+    # take the pig_alias_depth innermost aliases and prepend 
+    # them to the column name.  Ignore the rest.
+    # e.g. table_2::table_1::my_alias => table_1_my_alias if
+    # pig_alias_depth is set to 1
+    pig_alias_depth = luigi.IntParameter(default=1)
 
     @abc.abstractproperty
     def s3_schema_path(self):
@@ -60,7 +68,7 @@ class CopyPigOutputToRedshiftTask(redshift.S3CopyToTable):
 
     def _set_columns(self):
         pig_schema = self._read_schema_file()
-        redshift_schema = get_column_definitions_from_pig_schema(pig_schema)
+        redshift_schema = get_column_definitions_from_pig_schema(pig_schema, alias_depth=self.pig_alias_depth)
         redshift_schema += self.table_keys()
         logger.info("Setting redshift columns as %s for table %s" % (redshift_schema, self.table))
         self.columns = redshift_schema;
@@ -83,8 +91,10 @@ PIG_TYPE_TO_REDSHIFT_TYPE = {
     15: "bigint",
     20: "float8",
     25: "float8",
+    30: "timestamp",
     50: "varchar(max)",
     55: "varchar(max)",
+    65: "bigint"
 }
 
 def get_column_definitions_from_pig_schema(schema, alias_depth=1):
