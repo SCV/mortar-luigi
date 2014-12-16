@@ -70,7 +70,7 @@ class CopyPigOutputToRedshiftTask(redshift.S3CopyToTable):
         pig_schema = self._read_schema_file()
         redshift_schema = get_column_definitions_from_pig_schema(pig_schema, alias_depth=self.pig_alias_depth)
         redshift_schema += self.table_keys()
-        logger.info("Setting redshift columns as %s for table %s" % (redshift_schema, self.table))
+        logger.debug("Setting redshift columns as %s for table %s" % (redshift_schema, self.table))
         self.columns = redshift_schema;
 
     def _read_schema_file(self):
