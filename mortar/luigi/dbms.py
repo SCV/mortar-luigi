@@ -395,11 +395,18 @@ class ExtractFromMySQL(luigi.Task):
     Also, ensure you have installed the mysql command-line tool
     on your system. This tool is installed automatically on 
     Mortar's pipeline servers.
+
+    You can also override dbname and host by providing parameters
+    to your Luigi task.
     """
 
     # Name of MySQL Database where table is located.
     # Default: mysql.dbname in your configuration file.
     dbname = luigi.Parameter(default=None)
+
+    # Hostname for MySQL Database where table is located
+    # Default: mysql.host in your configuration file.
+    host = luigi.Parameter(default=None)
 
     # Table to extract
     table = luigi.Parameter()
@@ -434,6 +441,18 @@ class ExtractFromMySQL(luigi.Task):
     # Default: False
     raw = luigi.BooleanParameter(default=False)
 
+    def user(self):
+        config = luigi.configuration.get_config()
+        return config.get('mysql', 'user')
+
+    def password(self):
+        config = luigi.configuration.get_config()
+        return config.get('mysql', 'password')
+
+    def port(self):
+        config = luigi.configuration.get_config()
+        return config.get('mysql', 'port')
+
     def output(self):
         """
         Tell Luigi about the output that this Task produces.
@@ -444,10 +463,10 @@ class ExtractFromMySQL(luigi.Task):
     def run(self):
         config = luigi.configuration.get_config()
         dbname = self.dbname if self.dbname else config.get('mysql', 'dbname')
-        user = config.get('mysql', 'user')
-        host = config.get('mysql', 'host')
-        password = config.get('mysql', 'password')
-        port = config.get('mysql', 'port')
+        mysql_host = self.host if self.host else config.get('mysql', 'host')
+        mysql_user = self.user()
+        mysql_password = self.password()
+        mysql_port = self.port()
 
         where_clause = 'WHERE %s' % self.where if self.where else ''
         raw_option = '--raw' if self.raw else ''
@@ -458,20 +477,20 @@ class ExtractFromMySQL(luigi.Task):
             # pipefail
             cmd_template = 'set -o pipefail && ' +  cmd_template + ' | sed -e "s/NULL//g"'
         cmd = cmd_template.format(
-            user=user,
-            password=password,
-            host=host,
-            port=port,
+            user=mysql_user,
+            password=mysql_password,
+            host=mysql_host,
+            port=mysql_port,
             columns=self.columns,
             table=self.table,
             where_clause=where_clause,
             raw_option=raw_option,
             dbname=dbname)
         cmd_printable = cmd_template.format(
-            user=user,
+            user=mysql_user,
             password='[REDACTED]',
-            host=host,
-            port=port,
+            host=mysql_host,
+            port=mysql_port,
             columns=self.columns,
             table=self.table,
             where_clause=where_clause,
