@@ -20,6 +20,7 @@ import time
 
 import luigi
 
+
 from mortar.api.v2 import API
 from mortar.api.v2 import clusters
 from mortar.api.v2 import jobs
@@ -96,6 +97,12 @@ class MortarProjectTask(MortarTask):
     # This option does not apply when running the Mortar job in local mode
     # (cluster_size = 0).
     run_on_single_use_cluster = luigi.BooleanParameter(False)
+
+    # If False, this task will only run on an idle cluster or will
+    # start up a new cluster if no idle clusters are found.  If True,
+    # this task may run on a cluster that has other jobs already running on it.
+    # If run_on_single_use_cluster is True, this parameter will be ignored.
+    share_running_cluster = luigi.BooleanParameter(False)
 
     # Whether a launched Hadoop cluster will take advantage of AWS
     # Spot Pricing (https://help.mortardata.com/technologies/hadoop/spot_instance_clusters)
@@ -307,7 +314,7 @@ class MortarProjectTask(MortarTask):
             cluster_id = clusters.LOCAL_CLUSTER_ID
         elif not self.run_on_single_use_cluster:
             # search for a suitable cluster
-            idle_clusters = self._get_idle_clusters(api, min_size=self.cluster_size)
+            idle_clusters = self._get_usable_clusters(api, min_size=self.cluster_size)
             if idle_clusters:
                 # grab the idle largest cluster that's big enough to use
                 largest_cluster = sorted(idle_clusters, key=lambda c: int(c['size']), reverse=True)[0]
@@ -330,12 +337,14 @@ class MortarProjectTask(MortarTask):
         logger.info('Submitted new job to mortar with job_id [%s]' % job_id)
         return job_id
 
-    def _get_idle_clusters(self, api, min_size=0):
+    def _get_usable_clusters(self, api, min_size=0):
         return [cluster for cluster in clusters.get_clusters(api)['clusters'] \
-            if (cluster.get('status_code') == clusters.CLUSTER_STATUS_RUNNING) and \
-               (cluster.get('cluster_type_code') != clusters.CLUSTER_TYPE_SINGLE_JOB) and \
-               (len(cluster.get('running_jobs')) == 0) and \
-               (int(cluster.get('size')) >= min_size)]
+            if (    (cluster.get('status_code') == clusters.CLUSTER_STATUS_RUNNING)
+                and (cluster.get('cluster_type_code') != clusters.CLUSTER_TYPE_SINGLE_JOB)
+                and (int(cluster.get('size')) >= min_size)
+                and (    len(cluster.get('running_jobs')) == 0
+                      or self.share_running_cluster)
+               )]
 
     def _poll_job_completion(self, api, job_id):
 
