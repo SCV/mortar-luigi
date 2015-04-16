@@ -314,11 +314,11 @@ class MortarProjectTask(MortarTask):
             cluster_id = clusters.LOCAL_CLUSTER_ID
         elif not self.run_on_single_use_cluster:
             # search for a suitable cluster
-            idle_clusters = self._get_usable_clusters(api, min_size=self.cluster_size)
-            if idle_clusters:
-                # grab the idle largest cluster that's big enough to use
-                largest_cluster = sorted(idle_clusters, key=lambda c: int(c['size']), reverse=True)[0]
-                logger.info('Using largest running idle cluster with cluster_id [%s], size [%s]' % \
+            usable_clusters = self._get_usable_clusters(api, min_size=self.cluster_size)
+            if usable_clusters:
+                # grab the largest usable cluster
+                usable_cluster = sorted(usable_clusters, key=lambda c: int(c['size']), reverse=True)[0]
+                logger.info('Using largest running usable cluster with cluster_id [%s], size [%s]' % \
                     (largest_cluster['cluster_id'], largest_cluster['size']))
                 cluster_id = largest_cluster['cluster_id']
 
