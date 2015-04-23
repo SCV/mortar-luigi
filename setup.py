@@ -28,7 +28,7 @@ setup(name='mortar-luigi',
       install_requires=[
           'luigi',
           'requests',
-          'boto==2.24.0',
+          'boto>=2.24.0',
           'pymongo>=2.5',
           'mortar-api-python>=0.2.4'
       ],
