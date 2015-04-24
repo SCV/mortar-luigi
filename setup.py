@@ -36,7 +36,7 @@ setup(name='mortar-luigi',
       tests_require=[
           'mock',
           'six',
-          'moto==0.3.9',
+          'moto',
           'nose>=1.3.0'
       ]
 )
